@@ -1,3 +1,6 @@
+######################################################################
+# General Purpose Input/Output (GPIO) Pin numbers
+######################################################################
 PHOTO = 24
 TOGGLE = 17
 RESET = 25
@@ -16,5 +19,3 @@ TWITTER_CONSUMER_KEY = 'xxxxxxxxxxxxxxxxxxxxxxxxxx'
 TWITTER_CONSUMER_SECRET = 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
 TWITTER_ACCESS_KEY = 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
 TWITTER_ACCESS_SECRET = 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
-
-
