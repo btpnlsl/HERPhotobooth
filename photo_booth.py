@@ -62,6 +62,10 @@ class Twitter(object):
       except tweepy.error.TweepError as ex:
         self.logger.error("Unable to update Twitter status: %s", ex)
 
+############################################################################
+# Base class for a button connected via GPIO
+############################################################################
+
 class Button(object):
   """ Class to manage a momentary button on the Pi GPIO """
 
@@ -78,6 +82,10 @@ class Button(object):
     GPIO.setup(port, GPIO.IN)
     GPIO.add_interrupt_callback(port, self.onPressed)
     self.logger.debug("Button %d initialized", port)
+
+############################################################################
+# Base class for a LED connected via GPIO
+############################################################################
 
 class LED(object):
   """ Class to manage a LED on the Pi GPIO """
@@ -109,12 +117,21 @@ class LED(object):
     self.Set(state)
     self.logger.debug("LED %d initialized", port)
 
+############################################################################
+# The photo button also lights up, so it is a Button and a LED 
+############################################################################
+    
 class PhotoButton(Button, LED):
 
   def __init__(self, button_port, led_port, callback):
     Button.__init__(self, button_port, callback)
     LED.__init__(self, led_port)   
 
+############################################################################
+# The Toggle button lights up and can be toggled into ON or OFF.  The button
+# will remain in a state until pressed.
+############################################################################
+    
 class ToggleButton(Button, LED):
  
   def TogglePressed(self, port):
@@ -135,6 +152,15 @@ class ToggleButton(Button, LED):
     Button.__init__(self, button_port, self.TogglePressed)
     LED.__init__(self, led_port, True)   
 
+############################################################################
+# StoppableThread is encapsulates a thread and an event and provides an 
+# readable interface to stop the thread and to tell if the thread has been
+# stopped.
+#
+# For the Photobooth the StopableThread is used to blink a LED on / off 
+# separately from the main thread.
+############################################################################
+    
 class StoppableThread(threading.Thread):
     """Thread class with a stop() method. The thread itself has to check
     regularly for the stopped() condition."""
@@ -159,9 +185,9 @@ class PhotoBooth(object):
   def __init__(self):
     self.logger = logging.getLogger(__name__)
 
-
   def setup_camera(self):
     self.camera = picamera.PiCamera()
+    # ToDo: move these settings into a config file
     self.camera.resolution = (500, 375) # use a smaller resolution for speed
     self.camera.vflip = False
     self.camera.hflip = True
@@ -194,13 +220,17 @@ class PhotoBooth(object):
     self.pictureId = 1    
     self.Upload.On()
 
+    # this calls an external process, montage, to take 4 pictures and turn them into one picture laid out in a 2 by 2 grid
     subprocess.call("montage /home/pi/photobooth_images/*.jpg -tile 2x2 -geometry +10+10 /home/pi/temp_montage2.jpg", shell=True)
 
+    # upload to Twitter
     self.twitter.update_status("Hollow Earth Photo booth", "/home/pi/temp_montage2.jpg")
 
+    # clean up temporary files
     subprocess.call("rm /home/pi/photobooth_images/*.jpg", shell=True)
     subprocess.call("rm /home/pi/temp_montage*", shell=True)
   
+    # get ready for the next picture
     self.Upload.Off()
     self.Photo.On()
 
@@ -217,6 +247,8 @@ class PhotoBooth(object):
       
     self.Photo.Off()
 
+    # the Toggle button is used to switch between single shot and all-at-once
+    # picture taking modes.  
     if self.Toggle.state == True:
       self.take_all_pictures()
     else:
@@ -255,21 +287,25 @@ class PhotoBooth(object):
       self.logger.info("=========================================================")
       self.logger.info("HER Photo Booth starting")
 
-      # Use Raspberry Pi board in Broadcom mode
+      # Use Raspberry Pi GPIO board in Broadcom mode
       self.logger.info("Configuring global settings")
       GPIO.setmode(GPIO.BCM)
 
+      # initialize camera and connection to Twitter
       self.pictureId = 1
       self.setup_camera()
       self.twitter = Twitter()
 
+      # create a thread for blinking LEDs
       self.BlinkyThread = StoppableThread(target=self.blinkPhotoLed)
 
+      # set the buttons and LEDs into their initial states
       self.Photo = PhotoButton(cfg.PHOTO, cfg.PHOTO_LED, self.onPhotoPressed)
       self.Toggle = ToggleButton(cfg.TOGGLE, cfg.TOGGLE_LED, self.onTogglePressed)
       self.Pose = LED(cfg.POSE_LED, False)
       self.Upload = LED(cfg.UPLOAD_LED, False)
-    
+
+      # wait for someone to press a button
       GPIO.wait_for_interrupts()
 
     except KeyboardInterrupt:
